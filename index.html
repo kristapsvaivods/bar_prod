@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products to Create • Live from Google Sheet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+        body { font-family: 'Inter', system_ui, sans-serif; }
+        .card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100">
+    <div class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-4xl font-semibold tracking-tight">Products to Create</h1>
+                <p class="text-zinc-400 mt-1">Live data from your Google Sheet • Updated automatically</p>
+            </div>
+            <div class="flex items-center gap-x-4">
+                <button onclick="loadData()" 
+                        class="flex items-center gap-x-2 bg-white text-zinc-900 px-5 py-3 rounded-2xl font-medium hover:bg-amber-400 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.058 11H1M12 3v2m0 16v2m9-9H15m-6 0a8 8 0 01-7.714-6.314M12 3a8 8 0 00-7.714 6.314" />
+                    </svg>
+                    Refresh Data
+                </button>
+                <a href="https://docs.google.com/spreadsheets/d/16ccPeVmZ6DNHfxqRdhOfvvza2HRm_WKJcVAeg7DudGc/edit" 
+                   target="_blank"
+                   class="text-sm text-zinc-400 hover:text-white flex items-center gap-x-1">
+                    Open Sheet
+                    <span class="text-xs bg-zinc-800 px-2 py-1 rounded-xl">↗</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div id="summary" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10"></div>
+
+        <!-- Search -->
+        <div class="mb-6">
+            <input 
+                id="searchInput"
+                type="text" 
+                placeholder="Search by code or product name..."
+                onkeyup="filterTable()"
+                class="w-full bg-zinc-900 border border-zinc-800 focus:border-amber-400 rounded-3xl px-6 py-4 text-lg outline-none transition-colors">
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="hidden flex items-center justify-center py-12">
+            <div class="flex items-center gap-x-3 text-amber-400">
+                <svg class="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span class="font-medium">Loading live data from Google Sheet...</span>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div id="tableContainer" class="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-zinc-800 bg-zinc-950">
+                        <th class="px-8 py-6 text-left font-medium text-amber-400">KODS</th>
+                        <th class="px-8 py-6 text-left font-medium text-amber-400">Kafija / Product</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400">LV</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400">EE</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400">LT</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400">FR</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400">PT</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400">KOPĀ</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody" class="divide-y divide-zinc-800 text-sm"></tbody>
+            </table>
+        </div>
+
+        <div id="emptyState" class="hidden text-center py-16">
+            <p class="text-zinc-400 text-lg">No products need to be created right now.</p>
+            <p class="text-zinc-500 text-sm mt-2">All amounts are zero in the sheet.</p>
+        </div>
+
+        <div class="mt-8 text-center text-xs text-zinc-500 flex items-center justify-center gap-x-2">
+            <span>Data fetched live from your Google Sheet</span>
+            <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+            <span>Public view only • No login required</span>
+        </div>
+    </div>
+
+    <script>
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/16ccPeVmZ6DNHfxqRdhOfvvza2HRm_WKJcVAeg7DudGc/export?format=csv";
+        
+        let allProducts = [];
+
+        function tailwindInit() {
+            tailwind.config = {
+                content: [],
+                theme: { extend: {} }
+            }
+        }
+
+        async function loadData() {
+            const loading = document.getElementById('loading');
+            const tableContainer = document.getElementById('tableContainer');
+            const emptyState = document.getElementById('emptyState');
+            
+            loading.classList.remove('hidden');
+            tableContainer.classList.add('hidden');
+            emptyState.classList.add('hidden');
+
+            try {
+                const response = await fetch(CSV_URL);
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
+                    header: false,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        const rows = results.data;
+                        
+                        // Skip first 3 header rows
+                        const dataRows = rows.slice(3);
+                        
+                        allProducts = [];
+                        
+                        dataRows.forEach(row => {
+                            const kods = (row[0] || '').trim();
+                            if (!kods || !kods.startsWith('KP-')) return;
+                            
+                            const kafija = (row[1] || '').trim();
+                            const lv = parseFloat(row[2] || 0);
+                            const ee = parseFloat(row[3] || 0);
+                            const lt = parseFloat(row[4] || 0);
+                            const fr = parseFloat(row[5] || 0);
+                            const pt = parseFloat(row[6] || 0);
+                            const kopa = parseFloat(row[8] || 0);
+                            
+                            // Only include products that actually need to be created
+                            if (kopa > 0) {
+                                allProducts.push({
+                                    kods,
+                                    kafija,
+                                    lv,
+                                    ee,
+                                    lt,
+                                    fr,
+                                    pt,
+                                    kopa
+                                });
+                            }
+                        });
+                        
+                        renderSummary();
+                        renderTable(allProducts);
+                        loading.classList.add('hidden');
+                        tableContainer.classList.remove('hidden');
+                    }
+                });
+            } catch (error) {
+                loading.innerHTML = `
+                    <div class="text-red-400 text-center">
+                        <p class="font-medium">Could not load the sheet.</p>
+                        <p class="text-sm mt-2">Make sure the Google Sheet is set to "Anyone with the link can view"</p>
+                        <button onclick="loadData()" class="mt-6 px-6 py-3 bg-red-400 text-white rounded-2xl text-sm">Try again</button>
+                    </div>`;
+            }
+        }
+
+        function renderSummary() {
+            const container = document.getElementById('summary');
+            container.innerHTML = '';
+            
+            const totals = {
+                LV: allProducts.reduce((sum, p) => sum + p.lv, 0),
+                EE: allProducts.reduce((sum, p) => sum + p.ee, 0),
+                LT: allProducts.reduce((sum, p) => sum + p.lt, 0),
+                FR: allProducts.reduce((sum, p) => sum + p.fr, 0),
+                PT: allProducts.reduce((sum, p) => sum + p.pt, 0),
+                TOTAL: allProducts.reduce((sum, p) => sum + p.kopa, 0)
+            };
+            
+            const labels = [
+                { code: 'LV', name: 'Latvia', value: totals.LV },
+                { code: 'EE', name: 'Estonia', value: totals.EE },
+                { code: 'LT', name: 'Lithuania', value: totals.LT },
+                { code: 'FR', name: 'France', value: totals.FR },
+                { code: 'PT', name: 'Portugal', value: totals.PT },
+                { code: 'KOPĀ', name: 'Total to create', value: totals.TOTAL, highlight: true }
+            ];
+            
+            labels.forEach(item => {
+                const div = document.createElement('div');
+                div.className = `bg-zinc-900 rounded-3xl p-6 card ${item.highlight ? 'ring-2 ring-amber-400' : ''}`;
+                div.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="text-xs font-medium tracking-widest text-zinc-400">${item.code}</div>
+                            <div class="text-zinc-100 font-medium mt-1">${item.name}</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-4xl font-semibold ${item.highlight ? 'text-amber-400' : 'text-white'}">${item.value}</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function renderTable(products) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            if (products.length === 0) {
+                document.getElementById('tableContainer').classList.add('hidden');
+                document.getElementById('emptyState').classList.remove('hidden');
+                return;
+            }
+            
+            products.forEach(product => {
+                const row = document.createElement('tr');
+                row.className = "hover:bg-zinc-800/50 transition-colors";
+                row.innerHTML = `
+                    <td class="px-8 py-6 font-mono font-medium text-amber-400">${product.kods}</td>
+                    <td class="px-8 py-6">${product.kafija}</td>
+                    <td class="px-8 py-6 text-center font-medium ${product.lv > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.lv}</td>
+                    <td class="px-8 py-6 text-center font-medium ${product.ee > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.ee}</td>
+                    <td class="px-8 py-6 text-center font-medium ${product.lt > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.lt}</td>
+                    <td class="px-8 py-6 text-center font-medium ${product.fr > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.fr}</td>
+                    <td class="px-8 py-6 text-center font-medium ${product.pt > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.pt}</td>
+                    <td class="px-8 py-6 text-center font-bold text-lg text-amber-400">${product.kopa}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function filterTable() {
+            const term = document.getElementById('searchInput').value.toLowerCase().trim();
+            
+            if (!term) {
+                renderTable(allProducts);
+                return;
+            }
+            
+            const filtered = allProducts.filter(p => 
+                p.kods.toLowerCase().includes(term) || 
+                p.kafija.toLowerCase().includes(term)
+            );
+            
+            renderTable(filtered);
+        }
+
+        // Auto-load when page opens
+        window.onload = function() {
+            tailwindInit();
+            loadData();
+        };
+    </script>
+</body>
+</html>
