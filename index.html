@@ -9,8 +9,22 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
         body { font-family: 'Inter', system_ui, sans-serif; }
+        
         .card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
         .card:hover { transform: translateY(-2px); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); }
+        
+        table { border-collapse: collapse; }
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #18181b;
+            box-shadow: 0 1px 0 #3f3f46;
+        }
+        .done {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100">
@@ -19,7 +33,7 @@
         <div class="flex items-center justify-between mb-8">
             <div>
                 <h1 class="text-4xl font-semibold tracking-tight">Products to Create</h1>
-                <p class="text-zinc-400 mt-1">Live data from your Google Sheet • Updated automatically</p>
+                <p class="text-zinc-400 mt-1">Live from Google Sheet • Check off completed items</p>
             </div>
             <div class="flex items-center gap-x-4">
                 <button onclick="loadData()" 
@@ -29,11 +43,14 @@
                     </svg>
                     Refresh Data
                 </button>
+                <button onclick="clearAllProgress()" 
+                        class="text-sm text-zinc-400 hover:text-red-400 transition-colors">
+                    Clear Progress
+                </button>
                 <a href="https://docs.google.com/spreadsheets/d/16ccPeVmZ6DNHfxqRdhOfvvza2HRm_WKJcVAeg7DudGc/edit" 
                    target="_blank"
                    class="text-sm text-zinc-400 hover:text-white flex items-center gap-x-1">
-                    Open Sheet
-                    <span class="text-xs bg-zinc-800 px-2 py-1 rounded-xl">↗</span>
+                    Open Sheet ↗
                 </a>
             </div>
         </div>
@@ -58,23 +75,23 @@
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
                 </svg>
-                <span class="font-medium">Loading live data from Google Sheet...</span>
+                <span class="font-medium">Loading live data...</span>
             </div>
         </div>
 
         <!-- Table -->
-        <div id="tableContainer" class="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800">
-            <table class="w-full">
+        <div id="tableContainer" class="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800 max-h-[75vh] overflow-auto">
+            <table class="w-full min-w-full">
                 <thead>
-                    <tr class="border-b border-zinc-800 bg-zinc-950">
-                        <th class="px-8 py-6 text-left font-medium text-amber-400">KODS</th>
+                    <tr class="border-b border-zinc-700 bg-zinc-950">
+                        <th class="px-8 py-6 text-left font-medium text-amber-400 w-32">KODS</th>
                         <th class="px-8 py-6 text-left font-medium text-amber-400">Kafija / Product</th>
-                        <th class="px-8 py-6 text-center font-medium text-amber-400">LV</th>
-                        <th class="px-8 py-6 text-center font-medium text-amber-400">EE</th>
-                        <th class="px-8 py-6 text-center font-medium text-amber-400">LT</th>
-                        <th class="px-8 py-6 text-center font-medium text-amber-400">FR</th>
-                        <th class="px-8 py-6 text-center font-medium text-amber-400">PT</th>
-                        <th class="px-8 py-6 text-center font-medium text-amber-400">KOPĀ</th>
+                        <th class="px-6 py-6 text-center font-medium text-amber-400 w-20">LV</th>
+                        <th class="px-6 py-6 text-center font-medium text-amber-400 w-20">EE</th>
+                        <th class="px-6 py-6 text-center font-medium text-amber-400 w-20">LT</th>
+                        <th class="px-6 py-6 text-center font-medium text-amber-400 w-20">FR</th>
+                        <th class="px-6 py-6 text-center font-medium text-amber-400 w-20">PT</th>
+                        <th class="px-8 py-6 text-center font-medium text-amber-400 w-24">KOPĀ</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody" class="divide-y divide-zinc-800 text-sm"></tbody>
@@ -83,25 +100,51 @@
 
         <div id="emptyState" class="hidden text-center py-16">
             <p class="text-zinc-400 text-lg">No products need to be created right now.</p>
-            <p class="text-zinc-500 text-sm mt-2">All amounts are zero in the sheet.</p>
         </div>
 
-        <div class="mt-8 text-center text-xs text-zinc-500 flex items-center justify-center gap-x-2">
-            <span>Data fetched live from your Google Sheet</span>
-            <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-            <span>Public view only • No login required</span>
+        <div class="mt-8 text-center text-xs text-zinc-500">
+            Progress is saved in your browser • Refresh the sheet to get latest numbers
         </div>
     </div>
 
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/16ccPeVmZ6DNHfxqRdhOfvvza2HRm_WKJcVAeg7DudGc/export?format=csv";
-        
         let allProducts = [];
+        let progress = {}; // key: "KP-XXXX-LV", value: true if done
 
-        function tailwindInit() {
-            tailwind.config = {
-                content: [],
-                theme: { extend: {} }
+        function loadProgress() {
+            const saved = localStorage.getItem('productProgress');
+            if (saved) progress = JSON.parse(saved);
+        }
+
+        function saveProgress() {
+            localStorage.setItem('productProgress', JSON.stringify(progress));
+        }
+
+        function isDone(kods, country) {
+            return !!progress[`${kods}-${country}`];
+        }
+
+        function toggleDone(kods, country, checkbox) {
+            const key = `${kods}-${country}`;
+            progress[key] = checkbox.checked;
+            saveProgress();
+            
+            // Optional: strike through the whole row if all amounts for this product are done
+            updateRowStyle(kods);
+        }
+
+        function updateRowStyle(kods) {
+            const row = document.querySelector(`tr[data-kods="${kods}"]`);
+            if (!row) return;
+            
+            const countries = ['LV','EE','LT','FR','PT'];
+            const allDone = countries.every(c => isDone(kods, c));
+            
+            if (allDone) {
+                row.classList.add('done');
+            } else {
+                row.classList.remove('done');
             }
         }
 
@@ -123,9 +166,7 @@
                     skipEmptyLines: true,
                     complete: function(results) {
                         const rows = results.data;
-                        
-                        // Skip first 3 header rows
-                        const dataRows = rows.slice(3);
+                        const dataRows = rows.slice(3); // skip header rows
                         
                         allProducts = [];
                         
@@ -141,18 +182,8 @@
                             const pt = parseFloat(row[6] || 0);
                             const kopa = parseFloat(row[8] || 0);
                             
-                            // Only include products that actually need to be created
                             if (kopa > 0) {
-                                allProducts.push({
-                                    kods,
-                                    kafija,
-                                    lv,
-                                    ee,
-                                    lt,
-                                    fr,
-                                    pt,
-                                    kopa
-                                });
+                                allProducts.push({ kods, kafija, lv, ee, lt, fr, pt, kopa });
                             }
                         });
                         
@@ -163,12 +194,8 @@
                     }
                 });
             } catch (error) {
-                loading.innerHTML = `
-                    <div class="text-red-400 text-center">
-                        <p class="font-medium">Could not load the sheet.</p>
-                        <p class="text-sm mt-2">Make sure the Google Sheet is set to "Anyone with the link can view"</p>
-                        <button onclick="loadData()" class="mt-6 px-6 py-3 bg-red-400 text-white rounded-2xl text-sm">Try again</button>
-                    </div>`;
+                console.error(error);
+                loading.innerHTML = `<div class="text-red-400">Failed to load data. Please try again.</div>`;
             }
         }
 
@@ -176,37 +203,28 @@
             const container = document.getElementById('summary');
             container.innerHTML = '';
             
-            const totals = {
-                LV: allProducts.reduce((sum, p) => sum + p.lv, 0),
-                EE: allProducts.reduce((sum, p) => sum + p.ee, 0),
-                LT: allProducts.reduce((sum, p) => sum + p.lt, 0),
-                FR: allProducts.reduce((sum, p) => sum + p.fr, 0),
-                PT: allProducts.reduce((sum, p) => sum + p.pt, 0),
-                TOTAL: allProducts.reduce((sum, p) => sum + p.kopa, 0)
-            };
+            const totals = allProducts.reduce((acc, p) => {
+                acc.LV += p.lv; acc.EE += p.ee; acc.LT += p.lt;
+                acc.FR += p.fr; acc.PT += p.pt; acc.TOTAL += p.kopa;
+                return acc;
+            }, {LV:0, EE:0, LT:0, FR:0, PT:0, TOTAL:0});
             
-            const labels = [
-                { code: 'LV', name: 'Latvia', value: totals.LV },
-                { code: 'EE', name: 'Estonia', value: totals.EE },
-                { code: 'LT', name: 'Lithuania', value: totals.LT },
-                { code: 'FR', name: 'France', value: totals.FR },
-                { code: 'PT', name: 'Portugal', value: totals.PT },
-                { code: 'KOPĀ', name: 'Total to create', value: totals.TOTAL, highlight: true }
+            const items = [
+                {code:'LV', name:'Latvia', value: totals.LV},
+                {code:'EE', name:'Estonia', value: totals.EE},
+                {code:'LT', name:'Lithuania', value: totals.LT},
+                {code:'FR', name:'France', value: totals.FR},
+                {code:'PT', name:'Portugal', value: totals.PT},
+                {code:'KOPĀ', name:'Total', value: totals.TOTAL, highlight:true}
             ];
             
-            labels.forEach(item => {
+            items.forEach(item => {
                 const div = document.createElement('div');
                 div.className = `bg-zinc-900 rounded-3xl p-6 card ${item.highlight ? 'ring-2 ring-amber-400' : ''}`;
                 div.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <div class="text-xs font-medium tracking-widest text-zinc-400">${item.code}</div>
-                            <div class="text-zinc-100 font-medium mt-1">${item.name}</div>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-4xl font-semibold ${item.highlight ? 'text-amber-400' : 'text-white'}">${item.value}</div>
-                        </div>
-                    </div>
+                    <div class="text-xs tracking-widest text-zinc-400">${item.code}</div>
+                    <div class="font-medium mt-1">${item.name}</div>
+                    <div class="text-4xl font-semibold mt-4 ${item.highlight ? 'text-amber-400' : ''}">${Math.round(item.value)}</div>
                 `;
                 container.appendChild(div);
             });
@@ -217,47 +235,81 @@
             tbody.innerHTML = '';
             
             if (products.length === 0) {
-                document.getElementById('tableContainer').classList.add('hidden');
                 document.getElementById('emptyState').classList.remove('hidden');
                 return;
             }
             
             products.forEach(product => {
-                const row = document.createElement('tr');
-                row.className = "hover:bg-zinc-800/50 transition-colors";
-                row.innerHTML = `
-                    <td class="px-8 py-6 font-mono font-medium text-amber-400">${product.kods}</td>
-                    <td class="px-8 py-6">${product.kafija}</td>
-                    <td class="px-8 py-6 text-center font-medium ${product.lv > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.lv}</td>
-                    <td class="px-8 py-6 text-center font-medium ${product.ee > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.ee}</td>
-                    <td class="px-8 py-6 text-center font-medium ${product.lt > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.lt}</td>
-                    <td class="px-8 py-6 text-center font-medium ${product.fr > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.fr}</td>
-                    <td class="px-8 py-6 text-center font-medium ${product.pt > 0 ? 'text-emerald-400' : 'text-zinc-400'}">${product.pt}</td>
-                    <td class="px-8 py-6 text-center font-bold text-lg text-amber-400">${product.kopa}</td>
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-zinc-800/70 transition-colors";
+                tr.dataset.kods = product.kods;
+                
+                let html = `
+                    <td class="px-8 py-5 font-mono font-medium text-amber-400">${product.kods}</td>
+                    <td class="px-8 py-5">${product.kafija}</td>
                 `;
-                tbody.appendChild(row);
+                // LV to PT checkboxes
+                const countries = [
+                    {code:'LV', val: product.lv},
+                    {code:'EE', val: product.ee},
+                    {code:'LT', val: product.lt},
+                    {code:'FR', val: product.fr},
+                    {code:'PT', val: product.pt}
+                ];
+                
+                countries.forEach(c => {
+                    const checked = isDone(product.kods, c.code) ? 'checked' : '';
+                    const disabled = c.val === 0 ? 'disabled' : '';
+                    html += `
+                        <td class="px-6 py-5 text-center">
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-sm font-medium ${c.val > 0 ? 'text-emerald-400' : 'text-zinc-500'}">${c.val}</span>
+                                ${c.val > 0 ? `
+                                <input type="checkbox" ${checked} ${disabled}
+                                    onchange="toggleDone('${product.kods}', '${c.code}', this)"
+                                    class="w-5 h-5 accent-amber-400 cursor-pointer">
+                                ` : ''}
+                            </div>
+                        </td>
+                    `;
+                });
+                
+                html += `
+                    <td class="px-8 py-5 text-center font-bold text-lg text-amber-400">${product.kopa}</td>
+                `;
+                
+                tr.innerHTML = html;
+                tbody.appendChild(tr);
+                
+                // Apply strikethrough if all done
+                updateRowStyle(product.kods);
             });
         }
 
         function filterTable() {
             const term = document.getElementById('searchInput').value.toLowerCase().trim();
-            
             if (!term) {
                 renderTable(allProducts);
                 return;
             }
-            
             const filtered = allProducts.filter(p => 
                 p.kods.toLowerCase().includes(term) || 
                 p.kafija.toLowerCase().includes(term)
             );
-            
             renderTable(filtered);
         }
 
-        // Auto-load when page opens
-        window.onload = function() {
-            tailwindInit();
+        function clearAllProgress() {
+            if (confirm("Clear all progress? This cannot be undone.")) {
+                progress = {};
+                saveProgress();
+                renderTable(allProducts);
+            }
+        }
+
+        // Initialize
+        window.onload = () => {
+            loadProgress();
             loadData();
         };
     </script>
