@@ -23,16 +23,15 @@
         }
         .zero { color: #52525b; }
 
-        /* Better mobile experience */
         @media (max-width: 640px) {
             th, td { 
                 padding: 14px 8px !important; 
                 font-size: 0.95rem;
             }
             .product-name {
-                max-width: 220px;
+                max-width: 240px;
                 white-space: normal;
-                line-height: 1.3;
+                line-height: 1.35;
             }
         }
     </style>
@@ -40,11 +39,10 @@
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
     <div class="max-w-5xl mx-auto px-4 py-6">
         
-        <!-- Header -->
         <div class="flex items-center justify-between mb-6">
             <div>
                 <h1 class="text-3xl font-semibold tracking-tight">Products to Create</h1>
-                <p class="text-zinc-400 text-sm">Check off as you finish them</p>
+                <p class="text-zinc-400 text-sm">Full list • Check when done</p>
             </div>
             <div class="flex gap-3">
                 <button onclick="loadData()" 
@@ -55,11 +53,10 @@
                         class="text-sm text-zinc-400 hover:text-red-400">Clear All</button>
                 <a href="https://docs.google.com/spreadsheets/d/16ccPeVmZ6DNHfxqRdhOfvvza2HRm_WKJcVAeg7DudGc/edit" 
                    target="_blank" 
-                   class="text-sm text-zinc-400 hover:text-white">Sheet ↗</a>
+                   class="text-sm text-zinc-400 hover:text-white">Open Sheet ↗</a>
             </div>
         </div>
 
-        <!-- Search -->
         <div class="mb-6">
             <input id="searchInput" 
                    type="text" 
@@ -69,10 +66,9 @@
         </div>
 
         <div id="loading" class="hidden py-12 text-center text-amber-400">
-            Loading products from Google Sheet...
+            Loading all products from Google Sheet...
         </div>
 
-        <!-- Table -->
         <div id="tableContainer" class="bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800 overflow-auto max-h-[78vh]">
             <table class="w-full min-w-[620px]">
                 <thead>
@@ -95,7 +91,7 @@
         </div>
 
         <div class="mt-8 text-center text-xs text-zinc-500">
-            Progress is saved automatically • Full list from your sheet
+            All products loaded • Progress saved in your browser
         </div>
     </div>
 
@@ -145,7 +141,7 @@
                     skipEmptyLines: true,
                     complete: (results) => {
                         const rows = results.data;
-                        const dataRows = rows.slice(4);   // Adjust this number if rows are still missing
+                        const dataRows = rows.slice(3);   // ← Fixed: now starts correctly from first product
 
                         allProducts = [];
 
@@ -169,6 +165,8 @@
                             });
                         });
 
+                        console.log(`Loaded ${allProducts.length} products`); // for debugging
+
                         renderTable(allProducts);
                         document.getElementById('loading').classList.add('hidden');
                         document.getElementById('tableContainer').classList.remove('hidden');
@@ -176,7 +174,7 @@
                 });
             } catch (e) {
                 console.error(e);
-                alert("Could not load the Google Sheet.\nMake sure it is set to 'Anyone with the link can view'.");
+                alert("Could not load the sheet. Please check the sharing settings (Anyone with the link can view).");
             }
         }
 
@@ -194,9 +192,7 @@
                 tr.className = "hover:bg-zinc-800/70 transition-colors";
                 tr.dataset.kods = p.kods;
 
-                let html = `
-                    <td class="px-6 py-5 product-name">${p.kafija}</td>
-                `;
+                let html = `<td class="px-6 py-5 product-name">${p.kafija}</td>`;
 
                 const countries = [
                     {c:'LV', v:p.lv}, {c:'EE', v:p.ee}, {c:'LT', v:p.lt},
@@ -235,14 +231,13 @@
         }
 
         function clearAllProgress() {
-            if (confirm("Clear all progress? This cannot be undone.")) {
+            if (confirm("Clear all progress?")) {
                 progress = {};
                 saveProgress();
                 renderTable(allProducts);
             }
         }
 
-        // Start the app
         window.onload = () => {
             loadProgress();
             loadData();
